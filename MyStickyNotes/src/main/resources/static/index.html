@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sticky Notes</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #d4edda; /* Light green background */
+        }
+        .header-container {
+            display: flex;
+            justify-content: space-between; /* Space between the button and the heading */
+            align-items: center; /* Vertically center align items */
+            padding: 20px;
+            background-color: #d4edda;
+            border-bottom: 1px solid #ccc;
+        }
+        h1 {
+            margin: 0;
+            padding: 0;
+            font-size: 24px;
+            text-align: center;
+            flex-grow: 1; /* Pushes the heading to the center */
+        }
+        #show-form-btn {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+        }
+        .note {
+            border: 1px solid #ccc;
+            background: #fff3cd; /* Light yellow background for notes */
+            padding: 10px;
+            margin: 10px;
+            width: calc(25% - 40px); /* Four notes per row with spacing */
+            box-sizing: border-box;
+            float: left;
+            border-radius: 5px;
+            position: relative;
+        }
+        .message {
+            color: #ff0000;
+            font-size: 18px;
+            text-align: center;
+        }
+        #create-form {
+            margin: 20px auto;
+            width: 80%;
+            max-width: 600px;
+            padding: 10px;
+            background: #fff;
+            border-radius: 5px;
+            display: none;
+        }
+        .delete {
+            background-color: #dc3545; /* Red background for delete button */
+            color: #fff;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+<div class="header-container">
+    <button id="show-form-btn">New Note</button>
+    <h1>Sticky Notes</h1>
+</div>
+<div id="notes"></div>
+<div id="message" class="message"></div>
+
+<!-- Form to create a new note -->
+<div id="create-form">
+    <h2>Create New Note</h2>
+    <input type="text" id="heading" placeholder="Heading" />
+    <textarea id="content" placeholder="Content"></textarea>
+    <button id="save-btn">Save Note</button>
+</div>
+
+<script>
+    async function fetchNotes() {
+        try {
+            const response = await fetch('/api');
+            const notes = await response.json();
+            const notesDiv = document.getElementById('notes');
+            const messageDiv = document.getElementById('message');
+
+            if (notes.length === 0) {
+                messageDiv.textContent = "No notes available";
+            } else {
+                messageDiv.textContent = ""; // Clear the message if there are notes
+                notesDiv.innerHTML = notes.map(note => {
+                    const createdDate = new Date(note.createdDate);
+                    const formattedCreatedDate = `${('0' + createdDate.getDate()).slice(-2)}/${('0' + (createdDate.getMonth() + 1)).slice(-2)}/${createdDate.getFullYear()} ${('0' + createdDate.getHours()).slice(-2)}:${('0' + createdDate.getMinutes()).slice(-2)}`;
+
+                    const updatedDate = note.updatedDate ? new Date(note.updatedDate) : null;
+                    const formattedUpdatedDate = updatedDate ? `${('0' + updatedDate.getDate()).slice(-2)}/${('0' + (updatedDate.getMonth() + 1)).slice(-2)}/${updatedDate.getFullYear()} ${('0' + updatedDate.getHours()).slice(-2)}:${('0' + updatedDate.getMinutes()).slice(-2)}` : '';
+
+                    return `
+                        <div class="note">
+                            <h2>${note.heading}</h2>
+                            <p>${note.content}</p>
+                            <p>Created: ${formattedCreatedDate}</p>
+                            ${updatedDate ? `<p>Updated: ${formattedUpdatedDate}</p>` : ''}
+                            <button class="delete" onclick="deleteNote(${note.id})">Delete</button>
+                            <button onclick="showEditForm(${note.id})">Edit</button>
+                            <div id="edit-form-${note.id}" style="display:none;">
+                                <input type="text" id="edit-heading-${note.id}" value="${note.heading}" />
+                                <textarea id="edit-content-${note.id}">${note.content}</textarea>
+                                <button onclick="updateNote(${note.id})">Save</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        } catch (error) {
+            console.error('Error fetching notes:', error);
+            document.getElementById('message').textContent = "Error fetching notes";
+        }
+    }
+
+    document.getElementById('save-btn').addEventListener('click', async () => {
+        const heading = document.getElementById('heading').value;
+        const content = document.getElementById('content').value;
+
+        if (!heading || !content) {
+            alert('Please fill in both fields.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/post', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ heading, content })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            document.getElementById('heading').value = '';
+            document.getElementById('content').value = '';
+            document.getElementById('create-form').style.display = 'none';
+
+            fetchNotes();
+        } catch (error) {
+            console.error('Error saving note:', error);
+            alert(`Error saving note: ${error.message}`);
+        }
+    });
+
+    document.getElementById('show-form-btn').addEventListener('click', () => {
+        document.getElementById('create-form').style.display = 'block';
+    });
+
+    async function deleteNote(id) {
+        try {
+            const response = await fetch(`/api/post/${id}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            fetchNotes();
+        } catch (error) {
+            console.error('Error deleting note:', error);
+            alert(`Error deleting note: ${error.message}`);
+        }
+    }
+
+    async function updateNote(id) {
+        const heading = document.getElementById(`edit-heading-${id}`).value;
+        const content = document.getElementById(`edit-content-${id}`).value;
+
+        if (!heading || !content) {
+            alert('Please fill in both fields.');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/post/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ heading, content })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            fetchNotes();
+        } catch (error) {
+            console.error('Error updating note:', error);
+            alert(`Error updating note: ${error.message}`);
+        }
+    }
+
+    function showEditForm(id) {
+        const editForm = document.getElementById(`edit-form-${id}`);
+        if (editForm.style.display === 'none') {
+            editForm.style.display = 'block';
+        } else {
+            editForm.style.display = 'none';
+        }
+    }
+
+    // Initial fetch of notes
+    window.onload = fetchNotes;
+</script>
+</body>
+</html>
